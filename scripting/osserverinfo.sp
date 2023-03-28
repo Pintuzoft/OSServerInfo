@@ -42,7 +42,6 @@ public void OnPluginStart() {
 public void OnMapStart ( ) {
     round = 0;
     GetCurrentMap(map, sizeof(map));
-    resetPlayersAll ( );
 }
 
 
@@ -90,18 +89,17 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
 public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast) {
     CreateTimer(5.0, Timer_ConnectPlayer, event.GetInt("userid"));
 }
+
 public Action Timer_ConnectPlayer ( Handle timer, int userid ) {
     int index = GetClientOfUserId(userid);
     if (index > 0 && index <= MAXPLAYERS) {
-
-        GetClientName(index, playerNames[index], sizeof(playerNames[index]));
-        
-        GetClientAuthId(index, playerSteamID[index], sizeof(playerSteamID[index]));
+        GetClientName ( index, playerNames[index], 64 );
+        GetClientName ( index, playerSteamID[index], 64 );
         playerKills[index] = GetClientFrags(index);
         playerDeaths[index] = GetClientDeaths(index);
-        playerAssists[index] = GetClientAssists(index);
+        playerAssists[index] = CS_GetClientAssists(index);
         playerTeam[index] = GetClientTeam(index);
-        playerConnectTime[index] = GetClientConnectTime(index);
+        playerConnectTime[index] = GetTime()-5;
         playerChanged[index] = true;
     }
     return Plugin_Handled;
@@ -128,42 +126,40 @@ public void updatePlayers ( ) {
     checkConnection();
 
     for ( int i = 1; i <= MAXPLAYERS; i++  ) {
-
-        if ( playerRemoved[i] ) {
-            stmt = SQL_PrepareStatement(mysql, "DELETE FROM players WHERE steamid = ?;");
-            SQL_BindParamString(stmt, 1, playerSteamID[i]);
+        if ( removePlayer[i] ) {
+            if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from players where steamid = ?", error, sizeof(error) ) ) == null ) {
+                SQL_GetError ( mysql, error, sizeof(error) );
+                PrintToServer("[OSServerInfo]: Failed to query[0x01] (error: %s)", error);
+                return;
+            }
+            SQL_BindParamString(stmt, 1, playerSteamID[i], false);
             SQL_Execute(stmt);
-            SQL_FreeStatement(stmt);
+            CloseHandle(stmt);
+
         } else if ( playerChanged[i] ) {
-            stmt = SQL_PrepareStatement(mysql, "INSERT INTO players (steamid, name, kills, deaths, assists, team, connecttime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `name` = ?, `kills` = ?, `deaths` = ?, `assists` = ?, `team` = ?, `connecttime` = ?, `rounds` = ?, `map` = ?;");
-            SQL_BindParamString(stmt, 1, playerSteamID[i]);
-            SQL_BindParamString(stmt, 2, playerNames[i]);
+            if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into players (steamid, name, kills, deaths, assists, team, connecttime) values (?, ?, ?, ?, ?, ?, ?, ?, ?) on duplicate key update name = ?, kills = ?, deaths = ?, assists = ?, team = ?, connecttime = ?", error, sizeof(error) ) ) == null ) {
+                SQL_GetError ( mysql, error, sizeof(error) );
+                PrintToServer("[OSGameAnalyzer]: Failed to query[0x01] (error: %s)", error);
+                return;
+            }
+            SQL_BindParamString(stmt, 1, playerSteamID[i], false);
+            SQL_BindParamString(stmt, 2, playerNames[i], false);
             SQL_BindParamInt(stmt, 3, playerKills[i]);
             SQL_BindParamInt(stmt, 4, playerDeaths[i]);
             SQL_BindParamInt(stmt, 5, playerAssists[i]);
             SQL_BindParamInt(stmt, 6, playerTeam[i]);
             SQL_BindParamInt(stmt, 7, playerConnectTime[i]);
-            SQL_BindParamInt(stmt, 8, round);
-            SQL_BindParamString(stmt, 9, map);
-            SQL_BindParamString(stmt, 10, playerNames[i]);
-            SQL_BindParamInt(stmt, 11, playerKills[i]);
-            SQL_BindParamInt(stmt, 12, playerDeaths[i]);
-            SQL_BindParamInt(stmt, 13, playerAssists[i]);
-            SQL_BindParamInt(stmt, 14, playerTeam[i]);
-            SQL_BindParamInt(stmt, 15, playerConnectTime[i]);
-            SQL_BindParamInt(stmt, 16, round);
-            SQL_BindParamString(stmt, 17, map);
+            SQL_BindParamString(stmt, 8, playerNames[i], false);
+            SQL_BindParamInt(stmt, 9, playerKills[i]);
+            SQL_BindParamInt(stmt, 10, playerDeaths[i]);
+            SQL_BindParamInt(stmt, 11, playerAssists[i]);
+            SQL_BindParamInt(stmt, 12, playerTeam[i]);
+            SQL_BindParamInt(stmt, 13, playerConnectTime[i]);
             SQL_Execute(stmt);
-            SQL_FreeStatement(stmt);
-
-
+            CloseHandle(stmt);
         }
-
     }
-
-
 }
-
 
 public void resetPlayers() {
     for (int i = 1; i <= MAXPLAYERS; i++) {
@@ -176,6 +172,7 @@ public void checkConnection() {
         databaseConnect();
     }
 }
+
 public bool isWarmup() {
     if (GameRules_GetProp("m_bWarmupPeriod") == 1) {
         return true;
@@ -183,3 +180,8 @@ public bool isWarmup() {
     return false;
 }
 
+public Action SetServerName ( Handle timer ) {
+    GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
+    PrintToServer("Server name: %s", serverName);
+    return Plugin_Stop; // Stop the timer
+}
