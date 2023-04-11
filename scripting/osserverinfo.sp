@@ -15,12 +15,14 @@ public Plugin myinfo = {
     url = "https://github.com/Pintuzoft/OSServerInfo"
 };
 
+int serverPort;
 char serverName[128];
 char map[64];
 
 public void OnPluginStart() {
     databaseConnect();
-    CreateTimer(5.0, SetServerName);
+    GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
+    serverPort = GetConVarInt(FindConVar("hostport"));
     HookEvent("player_disconnect", Event_PlayerDisconnect);
     HookEvent("player_connect", Event_PlayerConnect);
 }
@@ -32,7 +34,6 @@ public void OnMapStart ( ) {
 public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast) {
     connectPlayer ( name );
 }
-
 
 public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
     disconnectPlayer ( name );
@@ -49,15 +50,17 @@ public void databaseConnect() {
 public void updateServer (  ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into server (name,map) values (?,?) on duplicate update set map = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into server (port,name,map) values (?,?,?) on duplicate update set name = ?, map = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x01] (error: %s)", error);
         return;
     }
 
-    SQL_BindParamString ( stmt, 0, serverName, false );
-    SQL_BindParamString ( stmt, 1, map, false );
+    SQL_BindParamInt ( stmt, 0, serverPort );
+    SQL_BindParamString ( stmt, 1, serverName, false );
     SQL_BindParamString ( stmt, 2, map, false );
+    SQL_BindParamString ( stmt, 3, serverName, false );
+    SQL_BindParamString ( stmt, 4, map, false );
 
     if ( ! SQL_Execute ( stmt ) ) {
         SQL_GetError ( mysql, error, sizeof(error));
@@ -72,16 +75,16 @@ public void updateServer (  ) {
 public void connectPlayer ( const char[] name ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into player (server, name) values (?,?) on duplicate key update set name = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into player (sport, name) values (?,?) on duplicate key update set name = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x03] (error: %s)", error);
         return;
     }
 
-    SQL_BindParamString ( stmt, 0, serverName, false );
+    SQL_BindParamInt ( stmt, 0, serverPort );
     SQL_BindParamString ( stmt, 1, name, false );
     SQL_BindParamString ( stmt, 2, name, false );
-
+    
     if ( ! SQL_Execute ( stmt ) ) {
         SQL_GetError ( mysql, error, sizeof(error));
         PrintToServer("[OSServerInfo]: Failed to query[0x04] (error: %s)", error);
@@ -95,13 +98,13 @@ public void connectPlayer ( const char[] name ) {
 public void disconnectPlayer ( const char[] name ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from player where server = ? and name = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from player where sport = ? and name = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x05] (error: %s)", error);
         return;
     }
 
-    SQL_BindParamString ( stmt, 0, serverName, false );
+    SQL_BindParamInt ( stmt, 0, serverPort );
     SQL_BindParamString ( stmt, 1, name, false );
 
     if ( ! SQL_Execute ( stmt ) ) {
@@ -114,15 +117,9 @@ public void disconnectPlayer ( const char[] name ) {
     }
 }
 
-
 public void checkConnection() {
     if (mysql == null || mysql == INVALID_HANDLE) {
         databaseConnect();
     }
 }
   
-public Action SetServerName ( Handle timer ) {
-    GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
-    PrintToServer("Server name: %s", serverName);
-    return Plugin_Stop; // Stop the timer
-}
