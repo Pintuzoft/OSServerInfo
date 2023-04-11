@@ -34,8 +34,11 @@ public void OnMapStart ( ) {
 
 public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast) {
     int player_id = GetEventInt ( event, "userid" );
-    if ( playerIsReal ( player_id ) ) {
-        CreateTimer ( 3.0, handleNewPlayer, player_id ); 
+    int player = GetClientOfUserId ( player_id );
+
+
+    if ( playerIsReal ( player ) ) {
+        CreateTimer ( 3.0, handleNewPlayer, player ); 
     }
 }
 
@@ -43,9 +46,9 @@ public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroa
     disconnectPlayer ( name );
 }
 
-public Action handleNewPlayer ( Handle timer, int player_id ) {
+public Action handleNewPlayer ( Handle timer, int player ) {
     char name[32];
-    GetClientName ( player_id, name, sizeof(name) );
+    GetClientName ( player, name, sizeof(name) );
     connectPlayer ( name );
     return Plugin_Handled;
 }
@@ -134,10 +137,10 @@ public void checkConnection() {
     }
 }
 
-public bool playerIsReal ( int player_id ) {
-    if ( player_id > 0 && player_id <= MaxClients ) {
-        return true;
-    }
-    return false;
+public bool playerIsReal ( int player ) {
+    return ( player > 0 &&
+             IsClientInGame ( player ) &&
+             ! IsFakeClient ( player ) &&
+             ! IsClientSourceTV ( player ) );
 }
   
