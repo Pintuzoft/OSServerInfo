@@ -50,7 +50,7 @@ public void databaseConnect() {
 public void updateServer (  ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into server (port,name,map) values (?,?,?) on duplicate update set name = ?, map = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into server (port,name,map) values (?,?,?) on duplicate update name = ?, map = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x01] (error: %s)", error);
         return;
@@ -75,7 +75,7 @@ public void updateServer (  ) {
 public void connectPlayer ( const char[] name ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into player (sport, name) values (?,?) on duplicate key update set name = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into player (sport, name) values (?,?) on duplicate key update name = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x03] (error: %s)", error);
         return;
