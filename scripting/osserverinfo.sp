@@ -27,6 +27,7 @@ public void OnPluginStart() {
     HookEvent("player_connect", Event_PlayerConnect);
 }
 public void OnMapStart ( ) {
+    GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
     GetCurrentMap ( map, sizeof(map) );
     updateServer ( );    
 }
