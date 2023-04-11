@@ -34,7 +34,9 @@ public void OnMapStart ( ) {
 
 public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast) {
     int player_id = GetEventInt ( event, "userid" );
-    CreateTimer ( 1.0, handleNewPlayer, player_id );
+    if ( playerIsReal ( player_id ) ) {
+        CreateTimer ( 3.0, handleNewPlayer, player_id ); 
+    }
 }
 
 public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
@@ -130,5 +132,12 @@ public void checkConnection() {
     if (mysql == null || mysql == INVALID_HANDLE) {
         databaseConnect();
     }
+}
+
+public bool playerIsReal ( int player_id ) {
+    if ( player_id > 0 && player_id <= MaxClients ) {
+        return true;
+    }
+    return false;
 }
   
