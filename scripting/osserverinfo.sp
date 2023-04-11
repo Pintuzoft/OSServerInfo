@@ -33,11 +33,19 @@ public void OnMapStart ( ) {
 }
 
 public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast) {
-    connectPlayer ( name );
+    int player_id = GetEventInt ( event, "userid" );
+    CreateTimer ( 1.0, handleNewPlayer, player_id );
 }
 
 public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
     disconnectPlayer ( name );
+}
+
+public Action handleNewPlayer ( Handle timer, int player_id ) {
+    char name[32];
+    GetClientName ( player_id, name, sizeof(name) );
+    connectPlayer ( name );
+    return Plugin_Handled;
 }
 
 public void databaseConnect() {
