@@ -149,10 +149,9 @@ public void checkConnection() {
 }
 
 public bool playerIsReal ( int player ) {
-    return true;
-//    return ( player > 0 &&
-//             IsClientInGame ( player ) &&
-//             ! IsFakeClient ( player ) &&
-//             ! IsClientSourceTV ( player ) );
+    return ( player > 0 &&
+             IsClientInGame ( player ) &&
+             ! IsFakeClient ( player ) &&
+             ! IsClientSourceTV ( player ) );
 }
   
