@@ -36,20 +36,30 @@ public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadca
     int player_id = GetEventInt ( event, "userid" );
     int player = GetClientOfUserId ( player_id );
 
-
     if ( playerIsReal ( player ) ) {
-        CreateTimer ( 3.0, handleNewPlayer, player ); 
+        char authid[64];
+        GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
+        CreateTimer ( 3.0, handleNewPlayer, player, TIMER_FLAG_NO_MAPCHANGE );
     }
 }
 
 public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
-    disconnectPlayer ( name );
+    int player_id = GetEventInt ( event, "userid" );
+    int player = GetClientOfUserId ( player_id );
+
+    if ( playerIsReal ( player ) ) {
+        char authid[64];
+        GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
+        disconnectPlayer ( authid );
+    }
 }
 
 public Action handleNewPlayer ( Handle timer, int player ) {
     char name[32];
+    char authid[64];
     GetClientName ( player, name, sizeof(name) );
-    connectPlayer ( name );
+    GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
+    connectPlayer ( name, authid );
     return Plugin_Handled;
 }
 
@@ -86,18 +96,19 @@ public void updateServer (  ) {
     }
 }
 
-public void connectPlayer ( const char[] name ) {
+public void connectPlayer ( const char[] name, const char[] authid ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into player (sport, name) values (?,?) on duplicate key update name = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into player (sport, steamid, name) values (?,?,?) on duplicate key update name = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x03] (error: %s)", error);
         return;
     }
 
     SQL_BindParamInt ( stmt, 0, serverPort );
-    SQL_BindParamString ( stmt, 1, name, false );
+    SQL_BindParamString ( stmt, 1, authid, false );
     SQL_BindParamString ( stmt, 2, name, false );
+    SQL_BindParamString ( stmt, 3, name, false );
     
     if ( ! SQL_Execute ( stmt ) ) {
         SQL_GetError ( mysql, error, sizeof(error));
@@ -109,17 +120,17 @@ public void connectPlayer ( const char[] name ) {
     }
 }
  
-public void disconnectPlayer ( const char[] name ) {
+public void disconnectPlayer ( const char[] authid ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from player where sport = ? and name = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from player where sport = ? and steamid = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x05] (error: %s)", error);
         return;
     }
 
     SQL_BindParamInt ( stmt, 0, serverPort );
-    SQL_BindParamString ( stmt, 1, name, false );
+    SQL_BindParamString ( stmt, 1, authid, false );
 
     if ( ! SQL_Execute ( stmt ) ) {
         SQL_GetError ( mysql, error, sizeof(error));
