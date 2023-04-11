@@ -50,7 +50,7 @@ public void databaseConnect() {
 public void updateServer (  ) {
     checkConnection ( );
     DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into server (port,name,map) values (?,?,?) on duplicate update name = ?, map = ?", error, sizeof(error) ) ) == null ) {
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into server (port,name,map) values (?,?,?) on duplicate key update name = ?, map = ?", error, sizeof(error) ) ) == null ) {
         SQL_GetError ( mysql, error, sizeof(error) );
         PrintToServer("[OSServerInfo]: Failed to prepare query[0x01] (error: %s)", error);
         return;
