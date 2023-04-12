@@ -33,16 +33,11 @@ public void OnMapStart ( ) {
 }
 
 public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast) {
-    int player_id = GetEventInt ( event, "userid" );
-    int player = GetClientOfUserId ( player_id );
+    int playerid = GetEventInt ( event, "userid" );
 
-    PrintToServer ( "Player %d connected", player );
-    if ( playerIsReal ( player ) ) {
-        PrintToServer ( "Player %d is real", player );
-        CreateTimer ( 3.0, handleNewPlayer, player, TIMER_FLAG_NO_MAPCHANGE );
-    } else {
-        PrintToServer ( "Player %d is fake", player );
-    }
+    PrintToServer ( "Player %d connected", playerid );
+    CreateTimer ( 3.0, handleNewPlayer, playerid, TIMER_FLAG_NO_MAPCHANGE );
+    PrintToServer ( "Player %d end", playerid );
 }
 
 public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
@@ -56,16 +51,22 @@ public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroa
     }
 }
 
-public Action handleNewPlayer ( Handle timer, int player ) {
+public Action handleNewPlayer ( Handle timer, int playerid ) {
     char name[32];
     char authid[64];
+
+    int player = GetClientOfUserId ( playerid );
     PrintToServer ( " - 0", player );
-    GetClientName ( player, name, sizeof(name) );
-    PrintToServer ( " - 1", player );
-    GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
-    PrintToServer ( " - 2", player );
-    connectPlayer ( name, authid );
+
+    if ( playerIsReal ( player ) ) {
+        GetClientName ( player, name, sizeof(name) );
+        PrintToServer ( " - 1", player );
+        GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
+        PrintToServer ( " - 2", player );
+        connectPlayer ( name, authid );
+    }
     PrintToServer ( " - 3", player );
+
     return Plugin_Handled;
 }
 
