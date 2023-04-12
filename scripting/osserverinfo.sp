@@ -34,6 +34,10 @@ public void OnClientPutInServer ( int client ) {
     char name[32];
     char authid[64];
 
+    if ( ! playerIsReal ( client ) ) {
+        return;
+    }
+
     GetClientName ( client, name, sizeof(name) );
     GetClientAuthId(client, AuthId_Steam2, authid, sizeof(authid));
     connectPlayer ( name, authid );
@@ -41,6 +45,11 @@ public void OnClientPutInServer ( int client ) {
 
 public void OnClientDisconnect ( int client ) {
     char authid[64];
+
+    if ( ! playerIsReal ( client ) ) {
+        return;
+    }
+
     GetClientAuthId(client, AuthId_Steam2, authid, sizeof(authid));
     disconnectPlayer ( authid );
 }
