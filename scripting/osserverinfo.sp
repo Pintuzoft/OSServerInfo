@@ -23,8 +23,6 @@ public void OnPluginStart() {
     databaseConnect();
     GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
     serverPort = GetConVarInt(FindConVar("hostport"));
-    HookEvent("player_disconnect", Event_PlayerDisconnect);
-    HookEvent("player_connect", Event_PlayerConnect);
 }
 public void OnMapStart ( ) {
     GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
@@ -32,42 +30,19 @@ public void OnMapStart ( ) {
     updateServer ( );    
 }
 
-public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast) {
-    int playerid = GetEventInt ( event, "userid" );
-
-    PrintToServer ( "Player %d connected", playerid );
-    CreateTimer ( 3.0, handleNewPlayer, playerid, TIMER_FLAG_NO_MAPCHANGE );
-    PrintToServer ( "Player %d end", playerid );
-}
-
-public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
-    int player_id = GetEventInt ( event, "userid" );
-    int player = GetClientOfUserId ( player_id );
-
-    if ( playerIsReal ( player ) ) {
-        char authid[64];
-        GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
-        disconnectPlayer ( authid );
-    }
-}
-
-public Action handleNewPlayer ( Handle timer, int playerid ) {
+public void OnClientPutInServer ( int client ) {
     char name[32];
     char authid[64];
 
-    int player = GetClientOfUserId ( playerid );
-    PrintToServer ( " - 0", player );
+    GetClientName ( client, name, sizeof(name) );
+    GetClientAuthId(client, AuthId_Steam2, authid, sizeof(authid));
+    connectPlayer ( name, authid );
+}
 
-    if ( playerIsReal ( player ) ) {
-        GetClientName ( player, name, sizeof(name) );
-        PrintToServer ( " - 1", player );
-        GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
-        PrintToServer ( " - 2", player );
-        connectPlayer ( name, authid );
-    }
-    PrintToServer ( " - 3", player );
-
-    return Plugin_Handled;
+public void OnClientDisconnect ( int client ) {
+    char authid[64];
+    GetClientAuthId(client, AuthId_Steam2, authid, sizeof(authid));
+    disconnectPlayer ( authid );
 }
 
 public void databaseConnect() {
