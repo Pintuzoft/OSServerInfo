@@ -36,12 +36,12 @@ public void Event_PlayerConnect(Event event, const char[] name, bool dontBroadca
     int player_id = GetEventInt ( event, "userid" );
     int player = GetClientOfUserId ( player_id );
 
-    PrintToConsoleAll ( "Player %d connected", player );
+    PrintToServer ( "Player %d connected", player );
     if ( playerIsReal ( player ) ) {
-        PrintToConsoleAll ( "Player %d is real", player );
+        PrintToServer ( "Player %d is real", player );
         CreateTimer ( 3.0, handleNewPlayer, player, TIMER_FLAG_NO_MAPCHANGE );
     } else {
-        PrintToConsoleAll ( "Player %d is fake", player );
+        PrintToServer ( "Player %d is fake", player );
     }
 }
 
@@ -59,13 +59,13 @@ public void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroa
 public Action handleNewPlayer ( Handle timer, int player ) {
     char name[32];
     char authid[64];
-    PrintToConsoleAll ( " - 0", player );
+    PrintToServer ( " - 0", player );
     GetClientName ( player, name, sizeof(name) );
-    PrintToConsoleAll ( " - 1", player );
+    PrintToServer ( " - 1", player );
     GetClientAuthId(player, AuthId_Steam2, authid, sizeof(authid));
-    PrintToConsoleAll ( " - 2", player );
+    PrintToServer ( " - 2", player );
     connectPlayer ( name, authid );
-    PrintToConsoleAll ( " - 3", player );
+    PrintToServer ( " - 3", player );
     return Plugin_Handled;
 }
 
