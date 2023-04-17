@@ -27,7 +27,9 @@ public void OnPluginStart() {
 public void OnMapStart ( ) {
     GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
     GetCurrentMap ( map, sizeof(map) );
-    updateServer ( );    
+    updateServer ( );
+    playerCleanup ( );
+    addPlayers ( );
 }
 
 public void OnClientPutInServer ( int client ) {
@@ -132,7 +134,38 @@ public void disconnectPlayer ( const char[] authid ) {
         delete stmt;
     }
 }
+public void playerCleanup ( ) {
+    checkConnection ( );
+    DBStatement stmt;
+    if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from player where sport = ?", error, sizeof(error) ) ) == null ) {
+        SQL_GetError ( mysql, error, sizeof(error) );
+        PrintToServer("[OSServerInfo]: Failed to prepare query[0x05] (error: %s)", error);
+        return;
+    }
 
+    SQL_BindParamInt ( stmt, 0, serverPort );
+
+    if ( ! SQL_Execute ( stmt ) ) {
+        SQL_GetError ( mysql, error, sizeof(error));
+        PrintToServer("[OSServerInfo]: Failed to query[0x06] (error: %s)", error);
+    }
+
+    if ( stmt != null ) {
+        delete stmt;
+    }
+}
+public void addPlayers ( ) {
+    for ( int player = 1; player < MaxClients; player++ ) {
+        if ( playerIsReal ( player ) ) {
+            char name[32];
+            char authid[64];
+
+            GetClientName ( player, name, sizeof(name) );
+            GetClientAuthId ( player, AuthId_Steam2, authid, sizeof(authid) );
+            connectPlayer ( name, authid );
+        }
+    }
+}
 public void checkConnection() {
     if (mysql == null || mysql == INVALID_HANDLE) {
         databaseConnect();
