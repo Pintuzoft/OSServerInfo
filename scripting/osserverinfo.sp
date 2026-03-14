@@ -4,178 +4,216 @@
 #include <cstrike>
 #include <string>
 
-char error[255];
-Handle mysql = null;
+char g_Error[255];
+Database g_MySQL = null;
+
+int g_ServerPort;
+char g_ServerName[128];
+char g_Map[64];
+char g_Host[64];
+
+ConVar g_CvarHost;
 
 public Plugin myinfo = {
     name = "OSServerInfo",
     author = "Pintuz",
-    description = "OldSwedes Server Info plugin",
-    version = "0.01",
+    description = "OldSwedes Server Info plugin (OSBase schema)",
+    version = "0.02",
     url = "https://github.com/Pintuzoft/OSServerInfo"
 };
 
-int serverPort;
-char serverName[128];
-char map[64];
-
 public void OnPluginStart() {
-    databaseConnect();
-    GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
-    serverPort = GetConVarInt(FindConVar("hostport"));
-}
-public void OnMapStart ( ) {
-    GetConVarString(FindConVar("hostname"), serverName, sizeof(serverName));
-    GetCurrentMap ( map, sizeof(map) );
-    updateServer ( );
-    playerCleanup ( );
-    addPlayers ( );
+    g_CvarHost = CreateConVar("osserverinfo_host", "csgo.oldswedes.se", "Public hostname for serverinfo");
+    
+    GetConVarString(FindConVar("hostname"), g_ServerName, sizeof(g_ServerName));
+    g_ServerPort = GetConVarInt(FindConVar("hostport"));
+    GetConVarString(g_CvarHost, g_Host, sizeof(g_Host));
+
+    DatabaseConnect();
 }
 
-public void OnClientPutInServer ( int client ) {
-    char name[32];
-    char authid[64];
+public void OnMapStart() {
+    GetConVarString(FindConVar("hostname"), g_ServerName, sizeof(g_ServerName));
+    g_ServerPort = GetConVarInt(FindConVar("hostport"));
+    GetConVarString(g_CvarHost, g_Host, sizeof(g_Host));
+    GetCurrentMap(g_Map, sizeof(g_Map));
 
-    if ( ! playerIsReal ( client ) ) {
+    SaveServerInfo();
+    ClearUsers();
+    AddPlayers();
+}
+
+public void OnClientPutInServer(int client) {
+    char name[128];
+
+    if (!PlayerIsReal(client)) {
         return;
     }
 
-    GetClientName ( client, name, sizeof(name) );
-    GetClientAuthId(client, AuthId_Steam2, authid, sizeof(authid));
-    connectPlayer ( name, authid );
+    GetClientName(client, name, sizeof(name));
+    ConnectPlayer(name);
 }
 
-public void OnClientDisconnect ( int client ) {
-    char authid[64];
+public void OnClientDisconnect(int client) {
+    char name[128];
 
-    if ( ! playerIsReal ( client ) ) {
+    if (!PlayerIsReal(client)) {
         return;
     }
 
-    GetClientAuthId(client, AuthId_Steam2, authid, sizeof(authid));
-    disconnectPlayer ( authid );
+    GetClientName(client, name, sizeof(name));
+    DisconnectPlayer(name);
 }
 
-public void databaseConnect() {
-    if ((mysql = SQL_Connect("serverinfo", true, error, sizeof(error))) != null) {
+public void DatabaseConnect() {
+    if ((g_MySQL = SQL_Connect("osbase", true, g_Error, sizeof(g_Error))) != null) {
         PrintToServer("[OSServerInfo]: Connected to mysql database!");
     } else {
-        PrintToServer("[OSServerInfo]: Failed to connect to mysql database! (error: %s)", error);
+        PrintToServer("[OSServerInfo]: Failed to connect to mysql database! (error: %s)", g_Error);
     }
 }
 
-public void updateServer (  ) {
-    checkConnection ( );
-    DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into server (port,name,map) values (?,?,?) on duplicate key update name = ?, map = ?", error, sizeof(error) ) ) == null ) {
-        SQL_GetError ( mysql, error, sizeof(error) );
-        PrintToServer("[OSServerInfo]: Failed to prepare query[0x01] (error: %s)", error);
+public void CheckConnection() {
+    if (g_MySQL == null) {
+        DatabaseConnect();
+    }
+}
+
+public void SaveServerInfo() {
+    CheckConnection();
+
+    DBStatement stmt = SQL_PrepareQuery(
+        g_MySQL,
+        "INSERT INTO serverinfo_server (port, host, name, map, timestamp) "
+        ... "VALUES (?, ?, ?, ?, UNIX_TIMESTAMP()) "
+        ... "ON DUPLICATE KEY UPDATE name = ?, map = ?, timestamp = UNIX_TIMESTAMP()",
+        g_Error,
+        sizeof(g_Error)
+    );
+
+    if (stmt == null) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to prepare query[0x01] (error: %s)", g_Error);
         return;
     }
 
-    SQL_BindParamInt ( stmt, 0, serverPort );
-    SQL_BindParamString ( stmt, 1, serverName, false );
-    SQL_BindParamString ( stmt, 2, map, false );
-    SQL_BindParamString ( stmt, 3, serverName, false );
-    SQL_BindParamString ( stmt, 4, map, false );
+    SQL_BindParamInt(stmt, 0, g_ServerPort);
+    SQL_BindParamString(stmt, 1, g_Host, false);
+    SQL_BindParamString(stmt, 2, g_ServerName, false);
+    SQL_BindParamString(stmt, 3, g_Map, false);
+    SQL_BindParamString(stmt, 4, g_ServerName, false);
+    SQL_BindParamString(stmt, 5, g_Map, false);
 
-    if ( ! SQL_Execute ( stmt ) ) {
-        SQL_GetError ( mysql, error, sizeof(error));
-        PrintToServer("[OSServerInfo]: Failed to query[0x02] (error: %s)", error);
+    if (!SQL_Execute(stmt)) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to query[0x02] (error: %s)", g_Error);
     }
 
-    if ( stmt != null ) {
-        delete stmt;
-    }
+    delete stmt;
 }
 
-public void connectPlayer ( const char[] name, const char[] authid ) {
-    checkConnection ( );
-    DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "insert into player (sport, steamid, name) values (?,?,?) on duplicate key update name = ?", error, sizeof(error) ) ) == null ) {
-        SQL_GetError ( mysql, error, sizeof(error) );
-        PrintToServer("[OSServerInfo]: Failed to prepare query[0x03] (error: %s)", error);
+public void ConnectPlayer(const char[] name) {
+    CheckConnection();
+
+    DBStatement stmt = SQL_PrepareQuery(
+        g_MySQL,
+        "INSERT INTO serverinfo_user (host, port, name, team, kills, assists, deaths) "
+        ... "VALUES (?, ?, ?, 0, 0, 0, 0) "
+        ... "ON DUPLICATE KEY UPDATE name = ?",
+        g_Error,
+        sizeof(g_Error)
+    );
+
+    if (stmt == null) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to prepare query[0x03] (error: %s)", g_Error);
         return;
     }
 
-    SQL_BindParamInt ( stmt, 0, serverPort );
-    SQL_BindParamString ( stmt, 1, authid, false );
-    SQL_BindParamString ( stmt, 2, name, false );
-    SQL_BindParamString ( stmt, 3, name, false );
-    
-    if ( ! SQL_Execute ( stmt ) ) {
-        SQL_GetError ( mysql, error, sizeof(error));
-        PrintToServer("[OSServerInfo]: Failed to query[0x04] (error: %s)", error);
+    SQL_BindParamString(stmt, 0, g_Host, false);
+    SQL_BindParamInt(stmt, 1, g_ServerPort);
+    SQL_BindParamString(stmt, 2, name, false);
+    SQL_BindParamString(stmt, 3, name, false);
+
+    if (!SQL_Execute(stmt)) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to query[0x04] (error: %s)", g_Error);
     }
 
-    if ( stmt != null ) {
-        delete stmt;
-    }
+    delete stmt;
 }
- 
-public void disconnectPlayer ( const char[] authid ) {
-    checkConnection ( );
-    DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from player where sport = ? and steamid = ?", error, sizeof(error) ) ) == null ) {
-        SQL_GetError ( mysql, error, sizeof(error) );
-        PrintToServer("[OSServerInfo]: Failed to prepare query[0x05] (error: %s)", error);
+
+public void DisconnectPlayer(const char[] name) {
+    CheckConnection();
+
+    DBStatement stmt = SQL_PrepareQuery(
+        g_MySQL,
+        "DELETE FROM serverinfo_user WHERE host = ? AND port = ? AND name = ?",
+        g_Error,
+        sizeof(g_Error)
+    );
+
+    if (stmt == null) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to prepare query[0x05] (error: %s)", g_Error);
         return;
     }
 
-    SQL_BindParamInt ( stmt, 0, serverPort );
-    SQL_BindParamString ( stmt, 1, authid, false );
+    SQL_BindParamString(stmt, 0, g_Host, false);
+    SQL_BindParamInt(stmt, 1, g_ServerPort);
+    SQL_BindParamString(stmt, 2, name, false);
 
-    if ( ! SQL_Execute ( stmt ) ) {
-        SQL_GetError ( mysql, error, sizeof(error));
-        PrintToServer("[OSServerInfo]: Failed to query[0x06] (error: %s)", error);
+    if (!SQL_Execute(stmt)) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to query[0x06] (error: %s)", g_Error);
     }
 
-    if ( stmt != null ) {
-        delete stmt;
-    }
+    delete stmt;
 }
-public void playerCleanup ( ) {
-    checkConnection ( );
-    DBStatement stmt;
-    if ( ( stmt = SQL_PrepareQuery ( mysql, "delete from player where sport = ?", error, sizeof(error) ) ) == null ) {
-        SQL_GetError ( mysql, error, sizeof(error) );
-        PrintToServer("[OSServerInfo]: Failed to prepare query[0x05] (error: %s)", error);
+
+public void ClearUsers() {
+    CheckConnection();
+
+    DBStatement stmt = SQL_PrepareQuery(
+        g_MySQL,
+        "DELETE FROM serverinfo_user WHERE host = ? AND port = ?",
+        g_Error,
+        sizeof(g_Error)
+    );
+
+    if (stmt == null) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to prepare query[0x07] (error: %s)", g_Error);
         return;
     }
 
-    SQL_BindParamInt ( stmt, 0, serverPort );
+    SQL_BindParamString(stmt, 0, g_Host, false);
+    SQL_BindParamInt(stmt, 1, g_ServerPort);
 
-    if ( ! SQL_Execute ( stmt ) ) {
-        SQL_GetError ( mysql, error, sizeof(error));
-        PrintToServer("[OSServerInfo]: Failed to query[0x06] (error: %s)", error);
+    if (!SQL_Execute(stmt)) {
+        SQL_GetError(g_MySQL, g_Error, sizeof(g_Error));
+        PrintToServer("[OSServerInfo]: Failed to query[0x08] (error: %s)", g_Error);
     }
 
-    if ( stmt != null ) {
-        delete stmt;
-    }
+    delete stmt;
 }
-public void addPlayers ( ) {
-    for ( int player = 1; player < MaxClients; player++ ) {
-        if ( playerIsReal ( player ) ) {
-            char name[32];
-            char authid[64];
 
-            GetClientName ( player, name, sizeof(name) );
-            GetClientAuthId ( player, AuthId_Steam2, authid, sizeof(authid) );
-            connectPlayer ( name, authid );
+public void AddPlayers() {
+    for (int player = 1; player <= MaxClients; player++) {
+        if (PlayerIsReal(player)) {
+            char name[128];
+            GetClientName(player, name, sizeof(name));
+            ConnectPlayer(name);
         }
     }
 }
-public void checkConnection() {
-    if (mysql == null || mysql == INVALID_HANDLE) {
-        databaseConnect();
-    }
-}
 
-public bool playerIsReal ( int player ) {
-    return ( player > 0 &&
-             IsClientInGame ( player ) &&
-             ! IsFakeClient ( player ) &&
-             ! IsClientSourceTV ( player ) );
+public bool PlayerIsReal(int player) {
+    return (
+        player > 0 &&
+        player <= MaxClients &&
+        IsClientInGame(player) &&
+        !IsFakeClient(player) &&
+        !IsClientSourceTV(player)
+    );
 }
-  
