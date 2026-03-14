@@ -2,7 +2,6 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <cstrike>
-#include <string>
 
 char g_Error[255];
 Database g_MySQL = null;
@@ -12,31 +11,38 @@ char g_ServerName[128];
 char g_Map[64];
 char g_Host[64];
 
-ConVar g_CvarHost;
-
 public Plugin myinfo = {
     name = "OSServerInfo",
     author = "Pintuz",
     description = "OldSwedes Server Info plugin (OSBase schema)",
-    version = "0.02",
+    version = "0.03",
     url = "https://github.com/Pintuzoft/OSServerInfo"
 };
 
 public void OnPluginStart() {
-    g_CvarHost = CreateConVar("osserverinfo_host", "csgo.oldswedes.se", "Public hostname for serverinfo");
-    
     GetConVarString(FindConVar("hostname"), g_ServerName, sizeof(g_ServerName));
     g_ServerPort = GetConVarInt(FindConVar("hostport"));
-    GetConVarString(g_CvarHost, g_Host, sizeof(g_Host));
+    g_Host[0] = '\0';
 
+    LoadConfig();
     DatabaseConnect();
 }
 
 public void OnMapStart() {
-    GetConVarString(FindConVar("hostname"), g_ServerName, sizeof(g_ServerName));
-    g_ServerPort = GetConVarInt(FindConVar("hostport"));
-    GetConVarString(g_CvarHost, g_Host, sizeof(g_Host));
+    char currentHostname[128];
+    int currentHostPort;
+
+    GetConVarString(FindConVar("hostname"), currentHostname, sizeof(currentHostname));
+    currentHostPort = GetConVarInt(FindConVar("hostport"));
     GetCurrentMap(g_Map, sizeof(g_Map));
+
+    if (g_ServerName[0] == '\0') {
+        strcopy(g_ServerName, sizeof(g_ServerName), currentHostname);
+    }
+
+    if (g_ServerPort <= 0) {
+        g_ServerPort = currentHostPort;
+    }
 
     SaveServerInfo();
     ClearUsers();
@@ -65,6 +71,87 @@ public void OnClientDisconnect(int client) {
     DisconnectPlayer(name);
 }
 
+public void LoadConfig() {
+    char path[PLATFORM_MAX_PATH];
+
+    BuildPath(Path_SM, path, sizeof(path), "configs/osserverinfo.cfg");
+
+    if (!FileExists(path)) {
+        PrintToServer("[OSServerInfo]: Config file not found: %s", path);
+        PrintToServer("[OSServerInfo]: Falling back to hostname/hostport where possible.");
+        return;
+    }
+
+    File file = OpenFile(path, "r");
+
+    if (file == null) {
+        PrintToServer("[OSServerInfo]: Failed to open config file: %s", path);
+        return;
+    }
+
+    char line[256];
+    while (!file.EndOfFile() && file.ReadLine(line, sizeof(line))) {
+        TrimString(line);
+
+        if (line[0] == '\0') {
+            continue;
+        }
+
+        if (StrContains(line, "//") == 0) {
+            continue;
+        }
+
+        char key[64];
+        char value[192];
+        key[0] = '\0';
+        value[0] = '\0';
+
+        int firstSpace = FindCharInString(line, ' ');
+        if (firstSpace == -1) {
+            continue;
+        }
+
+        strcopy(key, sizeof(key), line);
+        key[firstSpace] = '\0';
+        TrimString(key);
+
+        int valueStart = firstSpace + 1;
+        while (line[valueStart] == ' ' || line[valueStart] == '\t') {
+            valueStart++;
+        }
+
+        strcopy(value, sizeof(value), line[valueStart]);
+        TrimString(value);
+        StripQuotes(value);
+
+        if (StrEqual(key, "name", false)) {
+            strcopy(g_ServerName, sizeof(g_ServerName), value);
+        } else if (StrEqual(key, "host", false)) {
+            strcopy(g_Host, sizeof(g_Host), value);
+        } else if (StrEqual(key, "port", false)) {
+            g_ServerPort = StringToInt(value);
+        } else {
+            PrintToServer("[OSServerInfo]: Unknown config key: %s", key);
+        }
+    }
+
+    delete file;
+
+    if (g_ServerName[0] == '\0') {
+        GetConVarString(FindConVar("hostname"), g_ServerName, sizeof(g_ServerName));
+    }
+
+    if (g_ServerPort <= 0) {
+        g_ServerPort = GetConVarInt(FindConVar("hostport"));
+    }
+
+    if (g_Host[0] == '\0') {
+        PrintToServer("[OSServerInfo]: WARNING - host is empty in configs/osserverinfo.cfg");
+    }
+
+    PrintToServer("[OSServerInfo]: Config loaded. host=%s port=%d name=%s", g_Host, g_ServerPort, g_ServerName);
+}
+
 public void DatabaseConnect() {
     if ((g_MySQL = SQL_Connect("osbase", true, g_Error, sizeof(g_Error))) != null) {
         PrintToServer("[OSServerInfo]: Connected to mysql database!");
@@ -80,6 +167,11 @@ public void CheckConnection() {
 }
 
 public void SaveServerInfo() {
+    if (g_Host[0] == '\0') {
+        PrintToServer("[OSServerInfo]: Cannot save serverinfo, host is empty.");
+        return;
+    }
+
     CheckConnection();
 
     DBStatement stmt = SQL_PrepareQuery(
@@ -113,6 +205,10 @@ public void SaveServerInfo() {
 }
 
 public void ConnectPlayer(const char[] name) {
+    if (g_Host[0] == '\0') {
+        return;
+    }
+
     CheckConnection();
 
     DBStatement stmt = SQL_PrepareQuery(
@@ -144,6 +240,10 @@ public void ConnectPlayer(const char[] name) {
 }
 
 public void DisconnectPlayer(const char[] name) {
+    if (g_Host[0] == '\0') {
+        return;
+    }
+
     CheckConnection();
 
     DBStatement stmt = SQL_PrepareQuery(
@@ -172,6 +272,10 @@ public void DisconnectPlayer(const char[] name) {
 }
 
 public void ClearUsers() {
+    if (g_Host[0] == '\0') {
+        return;
+    }
+
     CheckConnection();
 
     DBStatement stmt = SQL_PrepareQuery(
