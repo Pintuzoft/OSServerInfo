@@ -317,7 +317,6 @@ public bool PlayerIsReal(int player) {
         player > 0 &&
         player <= MaxClients &&
         IsClientInGame(player) &&
-        !IsFakeClient(player) &&
         !IsClientSourceTV(player)
     );
 }
